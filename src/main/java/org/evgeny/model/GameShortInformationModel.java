@@ -1,16 +1,19 @@
 package org.evgeny.model;
 
 
-import lombok.*;
+import lombok.Data;
+import lombok.Getter;
 
 
 @Data
-@NoArgsConstructor
-@AllArgsConstructor
 @Getter
 
-
 public class GameShortInformationModel {
-    int appid;
+    long appid;
     String name;
+
+    public GameShortInformationModel(long appid, String name) {
+        this.appid = appid;
+        this.name = name;
+    }
 }

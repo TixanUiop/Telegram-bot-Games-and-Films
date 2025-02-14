@@ -28,7 +28,7 @@ public class MapperJSONArrToSetOfGameShort implements IMapper<JSONArray, Set<Gam
             JSONObject result = (JSONObject) jsonObject;
 
             gameShortInformationModel = new GameShortInformationModel(
-                    result.getInt("appid"),
+                    result.getLong("appid"),
                     result.getString("name")
             );
             gameShortInformationModelSet.add(gameShortInformationModel);

@@ -1,4 +1,4 @@
-package org.evgeny.utill;
+package org.evgeny.util;
 
 import lombok.experimental.UtilityClass;
 
