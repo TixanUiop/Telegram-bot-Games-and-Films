@@ -1,10 +1,11 @@
-package org.evgeny.mapper;
+package org.evgeny.Mapper;
 
 
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import org.evgeny.model.GameShortInformationModel;
+import org.evgeny.Model.GameShortInformationModel;
+import org.evgeny.Model.SaleGameModel;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -28,12 +29,25 @@ public class MapperJSONArrToSetOfGameShort implements IMapper<JSONArray, Set<Gam
             JSONObject result = (JSONObject) jsonObject;
 
             gameShortInformationModel = new GameShortInformationModel(
-                    result.getLong("appid"),
+                    new String(String.valueOf(result.getInt("appid"))),
                     result.getString("name")
             );
             gameShortInformationModelSet.add(gameShortInformationModel);
         }
 
         return gameShortInformationModelSet;
+    }
+
+    public SaleGameModel map(JSONObject obj, GameShortInformationModel gameShortInformationModel) {
+
+       return new SaleGameModel(
+               gameShortInformationModel.getAppid(),
+               gameShortInformationModel.getName(),
+               "asdasd",
+               //String.valueOf(obj.getInt("total_price")),
+               String.valueOf(obj.getInt("total_positive")),
+               String.valueOf(obj.getInt("total_negative")),
+               String.valueOf(obj.getInt("total_reviews"))
+       );
     }
 }
