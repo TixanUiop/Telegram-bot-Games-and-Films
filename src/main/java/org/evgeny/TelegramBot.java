@@ -1,6 +1,8 @@
 package org.evgeny;
 
 
+import org.evgeny.Exception.ParseData;
+import org.evgeny.Model.GameInStoreModel;
 import org.evgeny.Model.GameShortInformationModel;
 import org.evgeny.Service.GameShortService;
 import org.evgeny.Util.GetProperties;
@@ -92,7 +94,6 @@ public class TelegramBot extends TelegramLongPollingBot {
                         🔍 Узнать его можно тут: [SteamDB](https://steamdb.info/apps/).
                         """);
                 break;
-
             case "look":
                 sendMessage(userId, String.valueOf(userId) + data);
                 break;
@@ -113,11 +114,38 @@ public class TelegramBot extends TelegramLongPollingBot {
         try {
             GameShortInformationModel correctGameName = gameShortService.isCorrectGameName(gameName);
             if (correctGameName != null) {
-                sendMessage(userId, """
-                        ✅ *Игра найдена!* \s
-                        📌 Название: *%s* 🎮 \s
-                        🆔 ID: *%s* \s
-                        """.formatted(correctGameName.getName(), correctGameName.getAppid()));
+
+                try {
+                    GameInStoreModel gamePriceById = gameShortService.getGamePriceById(correctGameName);
+
+                    sendMessage(userId, """
+                ✅ *Игра найдена!*
+                📌 *Название:* *%s* 🎮
+                🆔 *ID:* *%s*
+                💰 *Цена в данный момент:* %s
+                💰 *Цена без скидки:* %s
+                🔥 *Скидка:* - %d%%
+                """.formatted(
+                            correctGameName.getName(),
+                            correctGameName.getAppid(),
+                            gamePriceById.getFinalFormatted(),
+                            gamePriceById.getInitialFormatted(),
+                            gamePriceById.getDiscount()
+                    ));
+                }
+                catch (ParseData pd) {
+                    sendMessage(userId, """
+                ✅ *Игра найдена!*
+                📌 *Название:* *%s* 🎮
+                🆔 *ID:* *%s*
+                💰 *Цена в данный момент:* %s
+                """.formatted(
+                            correctGameName.getName(),
+                            correctGameName.getAppid(),
+                            "Бесплатно"
+                    ));
+                }
+
             }
             else {
                 sendMessage(userId, """

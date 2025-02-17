@@ -3,14 +3,21 @@ package org.evgeny.Service;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.evgeny.DTO.GameStoreDTO;
+import org.evgeny.Exception.ParseData;
+import org.evgeny.Mapper.MapperGameStoreDTOToModel;
 import org.evgeny.Mapper.MapperJSONArrToSetOfGameShort;
+import org.evgeny.Model.GameInStoreModel;
 import org.evgeny.Model.GameShortInformationModel;
 import org.evgeny.Model.SaleGameModel;
 import org.evgeny.Util.GetProperties;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import javax.imageio.IIOException;
 import java.io.IOException;
+import java.io.InputStream;
+import java.math.BigDecimal;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.HashSet;
@@ -25,8 +32,43 @@ public class GameShortService {
     private static final GameShortService instance = new GameShortService();
 
     private final MapperJSONArrToSetOfGameShort mapperJSONArrToSetOfGameShort = MapperJSONArrToSetOfGameShort.getINSTANCE();
+    private final MapperGameStoreDTOToModel mapperGameStoreDTOToModel = MapperGameStoreDTOToModel.getINSTANCE();
 
 
+    public GameInStoreModel getGamePriceById(GameShortInformationModel game) throws IOException {
+        URL url = new URL(GetProperties.get("api.final.price").replace("!", game.getAppid()));
+        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+        StringBuilder stringBuilder = new StringBuilder();
+
+        try (Scanner scanner = new Scanner(conn.getInputStream()))
+        {
+            while (scanner.hasNext()) {
+                stringBuilder.append(scanner.nextLine());
+            }
+
+            JSONObject jsonObject = new JSONObject(stringBuilder.toString());
+
+            try {
+                JSONObject priceOverview = jsonObject.getJSONObject(game.getAppid())
+                        .getJSONObject("data")
+                        .getJSONObject("price_overview");
+
+                GameStoreDTO build = GameStoreDTO.builder()
+                        .appId(game.getAppid())
+                        .appName(game.getName())
+                        .currency(priceOverview.getString("currency"))
+                        .discount(priceOverview.getInt("discount_percent"))
+                        .initialFormatted(priceOverview.getString("initial_formatted"))
+                        .finalFormatted(priceOverview.getString("final_formatted"))
+                        .build();
+
+                return mapperGameStoreDTOToModel.map(build);
+            }
+            catch (Exception e) {
+                throw new ParseData(e.getMessage());
+            }
+        }
+    }
 
     public GameShortInformationModel isCorrectGameName(String name) throws IOException {
         URL url = new URL(GetProperties.get("api.all.games"));
@@ -53,23 +95,14 @@ public class GameShortService {
     }
 
     private GameShortInformationModel tryFindGame(String name, Set<GameShortInformationModel> set) {
-//        return  set.stream()
-//                .anyMatch(game -> game.getName().equals(name));
-
         Optional<GameShortInformationModel> findByNameOrId = set.stream()
-                .filter(game -> game.getName().equalsIgnoreCase(name) || String.valueOf(game.getAppid()).equals(name))
+                .filter(game -> game.getName().toLowerCase().replace(" ", "").equalsIgnoreCase(name.toLowerCase().replace(" ", "")) || String.valueOf(game.getAppid()).equals(name))
                 .map(game -> new GameShortInformationModel(
                         game.getAppid(),
                         game.getName()
                 ))
                 .findFirst();
-
-
         return findByNameOrId.orElse(null);
-
-        //long findByNameResult = findByName.map(gameShortInformationModel -> Long.parseLong(gameShortInformationModel.getAppid())).orElse(-1L);
-        //return set.stream()
-        //       .allMatch(gameShortInformationModel -> gameShortInformationModel.getName().equals(name));
     }
 
     private Optional<Set<GameShortInformationModel>> GetGameShortService() throws IOException {
