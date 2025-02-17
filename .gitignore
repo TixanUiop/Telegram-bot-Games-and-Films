@@ -34,7 +34,7 @@ build/
 ### VS Code ###
 .vscode/
 .idea
-.application.properties
+.src/main/resources/application.properties
 
 ### Mac OS ###
 .DS_Store
