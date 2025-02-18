@@ -1,10 +1,11 @@
 package org.evgeny;
 
 
+import org.evgeny.DTO.GameStoreShareInBotDTO;
 import org.evgeny.Exception.ParseData;
-import org.evgeny.Model.GameInStoreModel;
-import org.evgeny.Model.GameShortInformationModel;
+import org.evgeny.Model.*;
 import org.evgeny.Service.GameShortService;
+import org.evgeny.Service.UserGameService;
 import org.evgeny.Util.GetProperties;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
@@ -16,20 +17,25 @@ import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKe
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.KeyboardRow;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.time.LocalDate;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 public class TelegramBot extends TelegramLongPollingBot {
 
-    private final String WAIT = "waiting_input_game";
+
+
     private final String NAME_BOT = "bot.name";
     private Map<Long, String> userStates = new ConcurrentHashMap<>();
     private final GameShortService gameShortService = GameShortService.getInstance();
-
-
+    private Map<Long ,GameInStoreModel> usersDateBeforeAddedIntoDataBase = new ConcurrentHashMap<>();
+    private final UserGameService userGameService = UserGameService.getInstance();
     public TelegramBot(String token) {
         super(token);
     }
@@ -47,10 +53,54 @@ public class TelegramBot extends TelegramLongPollingBot {
             long chatId = update.getMessage().getChatId();
             String userName = update.getMessage().getFrom().getUserName();
 
-            if (userStates.containsKey(chatId) && userStates.get(chatId).equals(WAIT)) {
+            if (userStates.containsKey(chatId) && userStates.get(chatId).equals(StatusUsersInBot.WAIT_INPUT_GAME.name())) {
                 userStates.remove(chatId);
                 processedAddButtonClick(chatId, messageText);
                 return;
+            }
+            //Add price
+            if (userStates.containsKey(chatId) && userStates.get(chatId).equals(StatusUsersInBot.WAIT_INPUT_PRICE.name())
+                    && usersDateBeforeAddedIntoDataBase.containsKey(chatId)) {
+                userStates.remove(chatId);
+                GameInStoreModel gameInStoreModel = usersDateBeforeAddedIntoDataBase.get(chatId);
+                usersDateBeforeAddedIntoDataBase.remove(chatId);
+                processedAddButtonClickSetPrice(chatId, messageText, gameInStoreModel);
+                return;
+            }
+            //look btn
+            if (userStates.containsKey(chatId) && userStates.get(chatId).equals(StatusUsersInBot.WAIT_INPUT_LOOK.name())
+                    && usersDateBeforeAddedIntoDataBase.containsKey(chatId)) {
+                userStates.remove(chatId);
+                return;
+            }
+
+            if (messageText.replace("<", "").replace(">", "").startsWith("/remove")) {
+                Pattern pattern = Pattern.compile("^/remove\\s+(\\d+)$");
+                Matcher matcher = pattern.matcher(messageText.trim());
+
+                if (matcher.matches()) {
+                    String appId = matcher.group(1);
+
+                    sendMessage(chatId, """
+                        ⏳ *Идёт процесс удаления записи* \s
+                    """);
+                    // Логика для удаления
+                    if (userGameService.getDeleteById(BigInteger.valueOf(Long.parseLong(appId)))) {
+                        sendMessage(chatId, """
+                            ✅ *Игра успешно удалена из списока мониторинга цен!* \s
+                        """);
+                    }
+                    else {
+                        sendMessage(chatId, """
+                            ❌ *Не удалось удалить запись мониторинга.* \n
+                            📌 Возможно запись уже *удалена* или ID введен неверно.
+                         """);
+                    }
+                } else {
+                    sendMessage(chatId, """
+                    ❌ *Команда не распознана или ID неверен.* \s
+                 """);
+                }
             }
 
 
@@ -77,13 +127,21 @@ public class TelegramBot extends TelegramLongPollingBot {
                 }
             }
         }
-
     }
 
     private void handleCallBack(CallbackQuery callbackQuery) {
         String data = callbackQuery.getData();
         long userId = callbackQuery.getFrom().getId();
-        userStates.put(userId, WAIT);
+
+        if (data.equals("add"))
+        {
+            userStates.put(userId, StatusUsersInBot.WAIT_INPUT_GAME.name());
+        }
+        if (data.equals("look"))
+        {
+            userStates.put(userId, StatusUsersInBot.WAIT_INPUT_LOOK.name());
+        }
+
 
         switch (data) {
             case "add":
@@ -95,23 +153,94 @@ public class TelegramBot extends TelegramLongPollingBot {
                         """);
                 break;
             case "look":
-                sendMessage(userId, String.valueOf(userId) + data);
-                break;
-
-            case "delete":
-                sendMessage(userId, String.valueOf(userId) + data);
+                processedGetUserWatchlist(BigInteger.valueOf(userId));
                 break;
         }
+    }
 
+    private void processedGetUserWatchlist(BigInteger userId) {
+        Optional<List<UserModel>> allUsersGames = userGameService.getAllUsersGames(userId);
 
+        allUsersGames.ifPresentOrElse(
+                games ->
+                {
+                    String gameList = games.stream()
+                    .map(game -> """
+                    🎮 *Название:* %s
+                    💰 *Цель:* %.2f %s
+                    🆔 *App ID:* %s
+                    """.formatted(game.getGame_name(), game.getTarget_price(), "$", game.getGame_id()))
+                    .collect(Collectors.joining("──────────────────\n"));
+
+                    sendMessage(userId.longValue(), """
+                    📋 *Ваш список отслеживаемых игр:* \s
+                   
+                    %s
+                   
+                    ✏️ Чтобы *добавить* новую игру в список, используйте пункт добавление. \s\n
+                    ❌ Чтобы *удалить* игру из списка, используйте команду `/remove <App ID>`. \s
+                   
+                    🔍 Узнать App ID можно тут: [SteamDB](https://steamdb.info/apps/).
+                    """.formatted(
+                            gameList.isEmpty() ? "*Список пуст*" : gameList
+                    ));
+                },
+                () -> sendMessage(userId.longValue(), """
+                    ❌ *У вас нет ни одной игры в списке мониторинга* \s
+                    📌 Перейдите в пункт *Steam* → *Добавить* и следуйте инструкциям.
+                 """)
+        );
+    }
+
+    private void processedAddButtonClickSetPrice(long userId, String price, GameInStoreModel model) {
+        try {
+            BigDecimal result = BigDecimal.valueOf(Double.parseDouble(price));
+            boolean res = userGameService.addGame(
+                    UserModel.builder()
+                            .user_id(BigInteger.valueOf(userId))
+                            .game_id(BigInteger.valueOf(Long.parseLong(model.getAppId())))
+                            .game_name(model.getAppName())
+                            .target_price(result)
+                            .status(StatusGameFinder.waiting)
+                            .created_at(LocalDate.now())
+                            .build()
+            );
+            if (res) {
+                sendMessage(userId, """
+                ✅ *Игра успешно добавлена в список мониторинга цен!* \s
+                """);
+                sendKeyboardReplyKeyboard(userId);
+            }
+            else {
+                sendMessage(userId, """
+                ❌ *Игра уже есть в списке ожидания* \s
+                🔎 Проверьте правильность написания и попробуйте снова следуя примера написания стоимости.
+                """);
+            }
+        }
+        catch (IllegalArgumentException e) {
+            sendMessage(userId, """
+                ❌ *Цена указана неверно!* \s
+                🔎 Возможно, вы ошиблись в формате ввода стоимости. \s
+                Проверьте правильность написания и попробуйте снова следуя примера написания стоимости. \s
+                🔹 Примеры ввода цены:
+                               ✔️ 2.3
+                               ✔️ 10.30
+                               ✔️ 0.90
+                """);
+            userStates.put(userId, StatusUsersInBot.WAIT_INPUT_PRICE.name());
+        }
     }
 
     private void processedAddButtonClick(long userId, String gameName) {
+
         sendMessage(userId, """
                     🕵️ *Проверка на корректность написания игры...* \s
                     Пожалуйста, убедитесь, что название указано верно. \s
                 """);
+
         try {
+
             GameShortInformationModel correctGameName = gameShortService.isCorrectGameName(gameName);
             if (correctGameName != null) {
 
@@ -132,6 +261,22 @@ public class TelegramBot extends TelegramLongPollingBot {
                             gamePriceById.getInitialFormatted(),
                             gamePriceById.getDiscount()
                     ));
+
+                    sendMessage(userId, """
+                           📢 Укажите желаемую цену! 💰
+                        
+                           Введите сумму, по которой хотите приобрести игру.
+                           📉 *Когда её стоимость опустится или достигнет указанного уровня, мы сразу же пришлём вам уведомление!* 🔔🎮
+    
+                           🔹 Примеры ввода цены:
+                           ✔️ 2.3
+                           ✔️ 10.30
+                           ✔️ 0.90
+                           """);
+
+                    userStates.put(userId, StatusUsersInBot.WAIT_INPUT_PRICE.name());
+                    usersDateBeforeAddedIntoDataBase.put(userId, gamePriceById);
+
                 }
                 catch (ParseData pd) {
                     sendMessage(userId, """
@@ -145,15 +290,17 @@ public class TelegramBot extends TelegramLongPollingBot {
                             "Бесплатно"
                     ));
                 }
-
             }
             else {
                 sendMessage(userId, """
-                        ❌ *Игра не найдена!* \s
+                        ❌ *Игра не найдена!* \s\n
                         🔎 Возможно, вы ошиблись в названии или такой игры в Steam нет. \s
-                        Проверьте правильность написания и попробуйте снова. \s
+                        Проверьте правильность написания и попробуйте снова. \s\n
                         """);
+                sendKeyboardReplyKeyboard(userId);
             }
+
+
         }
         catch (Exception e) {
             sendMessage(userId, """
@@ -169,9 +316,9 @@ public class TelegramBot extends TelegramLongPollingBot {
                 
                 Этот бот поможет тебе отслеживать скидки на игры в *Steam* и сообщит, когда цена опустится до нужного уровня. 🎮🔥 \s
                 
-                🔹 Чтобы добавить игру в список отслеживания, выбери *Steam* → *Добавить*. \s
-                🔹 Для просмотра списка активных ожиданий – *Steam* → *Просмотреть*. \s
-                🔹 Чтобы удалить игру из мониторинга – *Steam* → *Удалить*. \s
+                🔹 Чтобы добавить игру в список отслеживания, выбери *Steam* → *Добавить*. \s\n
+                🔹 Для просмотра списка активных ожиданий – *Steam* → *Просмотреть*. \s\n
+                🔹 Чтобы удалить игру из мониторинга – *Steam* → *Удалить*. \s\n
                 
                 Также ты можешь узнать актуальные *киноафиши Гомеля* 🎬 или изменить настройки ⚙️ в соответствующем разделе. \s
                 
@@ -179,6 +326,7 @@ public class TelegramBot extends TelegramLongPollingBot {
                 
                 """.formatted(name);
         sendMessage(chatId, answer);
+        sendKeyboardReplyKeyboard(chatId);
     }
 
     private void sendMessage(Long chatId, String textToSend){
@@ -238,7 +386,6 @@ public class TelegramBot extends TelegramLongPollingBot {
         sendMessage.setText(
                 "*Выберите подходящий пункт:* \n\n" +
                 "✅ *Добавить* – Добавление необходимой игры в режим мониторинга цен.\n\n" +
-                "❌ *Удалить* – Удаление мониторинга необходимого продукта.\n\n" +
                 "📋 *Просмотреть* – Просмотр списка действующих ожиданий."
         );
         sendMessage.setParseMode("Markdown");
@@ -257,12 +404,7 @@ public class TelegramBot extends TelegramLongPollingBot {
         buttonLookAtList.setText("Просмотреть");
         buttonLookAtList.setCallbackData("look");
 
-        InlineKeyboardButton buttonRemove = new InlineKeyboardButton();
-        buttonRemove.setText("Удалить");
-        buttonRemove.setCallbackData("delete");
-
         row1.add(buttonAddGame);
-        row1.add(buttonRemove);
         row1.add(buttonLookAtList);
 
         inlineKeyboard.add(row1);

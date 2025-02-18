@@ -4,17 +4,19 @@ import lombok.Builder;
 import lombok.Data;
 
 import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.time.LocalDate;
 import java.time.LocalTime;
 
 
 @Builder
 @Data
 public class UserModel {
-    int id;
-    String user_id;
-    String game_id;
+    long id;
+    BigInteger user_id;
+    BigInteger game_id;
     String game_name;
     BigDecimal target_price;
     StatusGameFinder status;
-    LocalTime created_at;
+    LocalDate created_at;
 }
