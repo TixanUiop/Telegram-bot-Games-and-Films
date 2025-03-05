@@ -31,24 +31,30 @@ public class GameShortService {
     @Getter
     private static final GameShortService instance = new GameShortService();
 
-    private final MapperJSONArrToSetOfGameShort mapperJSONArrToSetOfGameShort = MapperJSONArrToSetOfGameShort.getINSTANCE();
-    private final MapperGameStoreDTOToModel mapperGameStoreDTOToModel = MapperGameStoreDTOToModel.getINSTANCE();
+    //private final MapperJSONArrToSetOfGameShort mapperJSONArrToSetOfGameShort = MapperJSONArrToSetOfGameShort.getINSTANCE();
+    //private final MapperGameStoreDTOToModel mapperGameStoreDTOToModel = MapperGameStoreDTOToModel.getINSTANCE();
 
+    private MapperJSONArrToSetOfGameShort mapperJSONArrToSetOfGameShort;
+    private MapperGameStoreDTOToModel mapperGameStoreDTOToModel;
+    private HttpService httpService;
+
+
+    public GameShortService(MapperJSONArrToSetOfGameShort mapperJSONArrToSetOfGameShort,
+                            MapperGameStoreDTOToModel mapperGameStoreDTOToModel,
+                            HttpService HttpService) {
+
+        this.mapperJSONArrToSetOfGameShort = mapperJSONArrToSetOfGameShort;
+        this.mapperGameStoreDTOToModel = mapperGameStoreDTOToModel;
+        this.httpService = HttpService;
+    }
 
     public GameInStoreModel getGamePriceById(GameShortInformationModel game) throws IOException {
-        URL url = new URL(GetProperties.get("api.final.price").replace("!", game.getAppid()));
-        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-        StringBuilder stringBuilder = new StringBuilder();
-
-        try (Scanner scanner = new Scanner(conn.getInputStream()))
-        {
-            while (scanner.hasNext()) {
-                stringBuilder.append(scanner.nextLine());
-            }
-
-            JSONObject jsonObject = new JSONObject(stringBuilder.toString());
+        String url = GetProperties.get("api.final.price").replace("!", game.getAppid());
+        String json = httpService.getJson(url);
 
             try {
+                JSONObject jsonObject = new JSONObject(json);
+
                 JSONObject priceOverview = jsonObject.getJSONObject(game.getAppid())
                         .getJSONObject("data")
                         .getJSONObject("price_overview");
@@ -67,31 +73,25 @@ public class GameShortService {
             catch (Exception e) {
                 throw new ParseData(e.getMessage());
             }
-        }
     }
 
-    public GameShortInformationModel isCorrectGameName(String name) throws IOException {
-        URL url = new URL(GetProperties.get("api.all.games"));
-        HttpURLConnection connection = (HttpURLConnection) url.openConnection();
 
-        StringBuilder stringBuilder = new StringBuilder();
+    public GameShortInformationModel isCorrectGameName(String name) throws IOException {
+        String string = GetProperties.get("api.all.games");
+
+        String json = httpService.getJson(string);
         Set<GameShortInformationModel> set = new HashSet<>();
 
-        try (Scanner scanner = new Scanner(connection.getInputStream())) {
-            while (scanner.hasNext()) {
-                stringBuilder.append(scanner.nextLine());
-            }
+        JSONObject jsonObject = new JSONObject(json);
 
-            JSONObject jsonObject = new JSONObject(stringBuilder.toString());
+        JSONArray jsonArray = jsonObject.getJSONObject("applist")
+                .getJSONObject("apps")
+                .getJSONArray("app");
 
-            JSONArray jsonArray = jsonObject.getJSONObject("applist")
-                    .getJSONObject("apps")
-                    .getJSONArray("app");
+        set = mapperJSONArrToSetOfGameShort.map(jsonArray);
 
-            set = mapperJSONArrToSetOfGameShort.map(jsonArray);
+       return tryFindGame(name, set);
 
-           return tryFindGame(name, set);
-        }
     }
 
     private GameShortInformationModel tryFindGame(String name, Set<GameShortInformationModel> set) {
@@ -128,6 +128,8 @@ public class GameShortService {
         return Optional.ofNullable(set);
     }
 
+
+    //TODO need to fix it
     public Optional<Set<SaleGameModel>> GetFullGames() {
         try {
             Optional<Set<GameShortInformationModel>> gameShortInformationModels = GetGameShortService();

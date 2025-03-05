@@ -25,7 +25,7 @@ public class MapperJSONArrToSetOfGameShort implements IMapper<JSONArray, Set<Gam
 
         Set<GameShortInformationModel> gameShortInformationModelSet = new HashSet<GameShortInformationModel>();
 
-        for (Object jsonObject: array) {
+        for (Object jsonObject : array) {
             JSONObject result = (JSONObject) jsonObject;
 
             gameShortInformationModel = new GameShortInformationModel(
@@ -38,6 +38,7 @@ public class MapperJSONArrToSetOfGameShort implements IMapper<JSONArray, Set<Gam
         return gameShortInformationModelSet;
     }
 
+    //This method is not using
     public SaleGameModel map(JSONObject obj, GameShortInformationModel gameShortInformationModel) {
 
        return new SaleGameModel(

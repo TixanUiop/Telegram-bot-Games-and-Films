@@ -12,8 +12,9 @@ import org.telegram.telegrambots.meta.api.objects.games.Game;
 public class MapperGameStoreDTOToModel implements IMapper<GameStoreDTO, GameInStoreModel> {
     @Getter
     private static final MapperGameStoreDTOToModel INSTANCE = new MapperGameStoreDTOToModel();
-
     private String DEFAULT_VALUE = "Бесплатно";
+
+
     @Override
     public GameInStoreModel map(GameStoreDTO from) {
         return GameInStoreModel.builder()

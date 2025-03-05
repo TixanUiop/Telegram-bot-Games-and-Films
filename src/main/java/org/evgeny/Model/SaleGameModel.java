@@ -2,6 +2,7 @@ package org.evgeny.Model;
 
 import lombok.*;
 
+@EqualsAndHashCode
 @Getter
 @Setter
 @NoArgsConstructor
