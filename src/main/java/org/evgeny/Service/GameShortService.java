@@ -128,7 +128,6 @@ public class GameShortService {
         return Optional.ofNullable(set);
     }
 
-
     //TODO need to fix it
     public Optional<Set<SaleGameModel>> GetFullGames() {
         try {

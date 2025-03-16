@@ -59,7 +59,7 @@ public class UserDAO implements IDAO<UserModel, Integer>{
             if (e.getSQLState().equals("23505")) {
                 return false;
             }
-            throw new ExceptionDAO("Ошибка добавления продукта Steam в базу данных");
+           throw new ExceptionDAO("Ошибка добавления продукта Steam в базу данных");
         }
     }
 
